@@ -1,36 +1,43 @@
 #!/usr/bin/env python3
-"""news-image-20261124: write the front page of 24 November 2026 to /output/entry.png.
+"""news-image-20261124 -- copy the pre-rendered front page to the output dir.
 
-The image is a 1024x1024 PNG drawn at build time (see render.py in the
-build directory): a clean newspaper front page, "THE WORLD IN ONE DAY",
-summing up Tuesday 24 November 2026 in 25 stories -- 3 big illustrated
-stories, a numbered world map, and a 22-item list, plus a KPI strip of
-the day's big numbers and a DATE CHECK box that names the 22 November
-and earlier stories deliberately left out. Every story carries its
-source; every illustration is drawn in code. This program only copies
-the PNG the repository holds, so it needs no network and writes
-identical bytes on every run.
+The 1024x1024 PNG for Tuesday 24 November 2026 ("THE WORLD IN ONE DAY":
+25 stories -- 3 big illustrated stories, a numbered world map, a
+22-item list, a KPI strip and a DATE CHECK box) is drawn at build time
+by render.py in the build directory. This entrypoint only copies it to
+/output/entry.png: no network, and the same bytes on every run.
 """
 import os
 import shutil
+import struct
 
-MAX_BYTES = 1048576
+LIMIT = 1_048_576
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def read_dimensions(path):
+    with open(path, "rb") as handle:
+        head = handle.read(33)
+    if head[:8] != PNG_MAGIC:
+        raise SystemExit("entry.png is not a PNG file")
+    if head[12:16] != b"IHDR":
+        raise SystemExit("entry.png has no IHDR chunk")
+    width, height = struct.unpack(">II", head[16:24])
+    return width, height
 
 
 def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.join(here, "entry.png")
-    dst = os.path.join(out_dir, "entry.png")
-    shutil.copyfile(src, dst)
-    with open(dst, "rb") as fh:
-        magic = fh.read(8)
-    if magic != b"\x89PNG\r\n\x1a\n":
-        os.remove(dst)
-        raise SystemExit("entry.png is not a PNG file")
-    if os.path.getsize(dst) > MAX_BYTES:
-        os.remove(dst)
+    dest_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(dest_dir, exist_ok=True)
+    base = os.path.dirname(os.path.abspath(__file__))
+    target = os.path.join(dest_dir, "entry.png")
+    shutil.copyfile(os.path.join(base, "entry.png"), target)
+    width, height = read_dimensions(target)
+    if width > 1024 or height > 1024:
+        os.remove(target)
+        raise SystemExit("entry.png is larger than 1024x1024")
+    if os.path.getsize(target) > LIMIT:
+        os.remove(target)
         raise SystemExit("entry.png is larger than 1 MiB")
 
 
